@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>W17 Teardown</title>
+<meta name="description" content="An interactive, annotated 3D teardown of the Mercedes-AMG F1 W17 E PERFORMANCE.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body class="loading panel-open">
+
+<canvas id="gl"></canvas>
+<div id="hotspot-layer" aria-live="off"></div>
+
+<!-- Loader ------------------------------------------------------------ -->
+<div id="loader">
+  <div class="loader-inner">
+    <div class="loader-mark">W17</div>
+    <div class="loader-bar"><i></i></div>
+    <div class="loader-text">Building geometry</div>
+  </div>
+</div>
+
+<!-- Identity ---------------------------------------------------------- -->
+<header id="ident">
+  <div class="ident-rule"></div>
+  <h1 id="car-name">&nbsp;</h1>
+  <p id="car-sub">&nbsp;</p>
+  <p class="ident-meta"><b id="part-count">0</b> annotated parts &middot; every figure tagged with its source</p>
+</header>
+
+<!-- Search ------------------------------------------------------------ -->
+<div id="searchbar">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 21 21"/></svg>
+  <input id="search" type="search" placeholder="Search any part, spec or figure" autocomplete="off" spellcheck="false">
+  <kbd>/</kbd>
+  <div id="search-results"></div>
+</div>
+
+<!-- Part browser ------------------------------------------------------ -->
+<aside id="browser">
+  <div class="browser-head">
+    <span class="micro">Part browser</span>
+  </div>
+  <div id="browser-list"></div>
+</aside>
+
+<!-- Detail panel ------------------------------------------------------ -->
+<aside id="panel" aria-live="polite"></aside>
+<button id="panel-close" type="button" aria-label="Close panel">&times;</button>
+
+<!-- Source legend ----------------------------------------------------- -->
+<div id="legend-wrap">
+  <div id="legend"></div>
+</div>
+
+<!-- Controls ---------------------------------------------------------- -->
+<div id="controls">
+  <div id="tours" class="tour-strip"></div>
+
+  <div class="ctl-row">
+    <button id="btn-cutaway" type="button" class="tgl" aria-pressed="false">
+      <span class="tgl-dot"></span>Cutaway
+    </button>
+    <button id="btn-aero" type="button" class="tgl" aria-pressed="false">
+      <span class="tgl-dot"></span>Aero <span class="btn-state">Corner</span>
+    </button>
+    <button id="btn-spin" type="button" class="tgl" aria-pressed="false">
+      <span class="tgl-dot"></span>Turntable
+    </button>
+
+    <label class="slider">
+      <span class="micro">Explode</span>
+      <input id="explode" type="range" min="0" max="100" value="0">
+    </label>
+
+    <button id="btn-browser" type="button" class="ghost">Browser</button>
+    <button id="btn-legend" type="button" class="ghost">Sources</button>
+    <button id="btn-reset" type="button" class="ghost">Reset</button>
+  </div>
+</div>
+
+<!-- Zoom / detail readout --------------------------------------------- -->
+<div id="hud">
+  <div class="hud-label micro">Detail level</div>
+  <div id="tier-meter">
+    <i data-t="1"></i><i data-t="2"></i><i data-t="3"></i><i data-t="4"></i>
+  </div>
+  <div id="tier-name">Assemblies</div>
+  <div id="readout">&nbsp;</div>
+  <div id="perf"></div>
+  <div class="hud-hint">Scroll to zoom &mdash; finer detail appears as you go in</div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

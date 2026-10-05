@@ -1,0 +1,194 @@
+// validate.mjs - headless build check.
+//
+//   node tools/validate.mjs
+//
+// Builds the car geometry outside a browser and reports:
+//   * whether every builder runs without throwing
+//   * the model bounding box against the published dimensions
+//   * annotated parts that have no geometry, and geometry with no annotation
+//
+// Uses a minimal canvas stub, since the material textures are drawn to a
+// canvas at load time and there is no DOM here.
+
+const ctxStub = new Proxy({}, {
+  get(target, prop) {
+    if (prop === 'measureText') return (t) => ({ width: String(t).length * 40 });
+    if (prop === 'createLinearGradient' || prop === 'createRadialGradient') {
+      return () => ({ addColorStop() {} });
+    }
+    if (prop === 'canvas') return { width: 512, height: 512 };
+    if (prop in target) return target[prop];
+    return () => {};
+  },
+  set(target, prop, value) { target[prop] = value; return true; },
+});
+
+globalThis.document = {
+  createElement(tag) {
+    if (tag !== 'canvas') return {};
+    return { width: 0, height: 0, getContext: () => ctxStub, style: {} };
+  },
+};
+globalThis.self = globalThis;
+
+const { buildW17 } = await import('../src/cars/w17/model.js');
+const { PARTS, GROUP_ORDER } = await import('../src/cars/w17/parts.js');
+const { default: D } = await import('../src/cars/w17/dims.js');
+const THREE = await import('three');
+
+let failed = false;
+const ok = (label, pass, detail = '') => {
+  console.log((pass ? '  PASS  ' : '  FAIL  ') + label + (detail ? '   ' + detail : ''));
+  if (!pass) failed = true;
+};
+
+console.log('\nBuilding W17 geometry...\n');
+const t0 = Date.now();
+const model = buildW17();
+const ms = Date.now() - t0;
+
+/* --- Geometry -------------------------------------------------------- */
+
+let meshCount = 0;
+let triCount = 0;
+let badGeo = [];
+model.root.traverse((o) => {
+  if (!o.isMesh) return;
+  meshCount++;
+  const pos = o.geometry.attributes.position;
+  triCount += (o.geometry.index ? o.geometry.index.count : pos.count) / 3;
+  for (let i = 0; i < pos.count; i++) {
+    if (!Number.isFinite(pos.getX(i)) || !Number.isFinite(pos.getY(i)) || !Number.isFinite(pos.getZ(i))) {
+      badGeo.push(o.userData.partId);
+      break;
+    }
+  }
+});
+
+console.log('BUILD');
+ok('builders ran without throwing', true, ms + ' ms');
+ok('meshes created', meshCount > 300, meshCount + ' meshes, ' + Math.round(triCount).toLocaleString() + ' triangles');
+ok('no NaN vertices', badGeo.length === 0, badGeo.length ? [...new Set(badGeo)].join(', ') : '');
+
+/* --- Dimensions ------------------------------------------------------ */
+
+model.root.updateMatrixWorld(true);
+const box = new THREE.Box3().setFromObject(model.root);
+const size = box.getSize(new THREE.Vector3());
+
+const near = (a, b, tol) => Math.abs(a - b) <= tol;
+
+console.log('\nDIMENSIONS   (published figures in brackets)');
+ok('overall length', near(size.z, D.length, 0.02),
+   size.z.toFixed(3) + ' m  [' + D.length + ']');
+ok('overall width', near(size.x, D.width, 0.02),
+   size.x.toFixed(3) + ' m  [' + D.width + ']');
+ok('overall height', size.y <= D.height + 0.02,
+   size.y.toFixed(3) + ' m  [max ' + D.height + ']');
+ok('sits on the ground plane', box.min.y >= -0.005 && box.min.y < 0.02,
+   'lowest point ' + box.min.y.toFixed(4) + ' m');
+ok('wheelbase', near(D.zFrontAxle - D.zRearAxle, D.wheelbase, 0.001),
+   (D.zFrontAxle - D.zRearAxle).toFixed(3) + ' m  [' + D.wheelbase + ']');
+
+/* --- Layout ---------------------------------------------------------- */
+
+const bbox = (id) => {
+  const b = new THREE.Box3();
+  const t = new THREE.Box3();
+  for (const m of model.meshes.get(id)) { t.setFromObject(m); b.union(t); }
+  return b;
+};
+
+console.log('\nLAYOUT');
+
+const ft = bbox('front-tyre');
+const rt = bbox('rear-tyre');
+ok('front tyres sit on the road', Math.abs(ft.min.y) < 0.004, 'contact at y=' + ft.min.y.toFixed(4));
+ok('rear tyres sit on the road', Math.abs(rt.min.y) < 0.004, 'contact at y=' + rt.min.y.toFixed(4));
+ok('front tyre diameter', near(ft.max.y - ft.min.y, D.tyreFrontDia, 0.004),
+   ((ft.max.y - ft.min.y) * 1000).toFixed(0) + ' mm  [' + D.tyreFrontDia * 1000 + ']');
+ok('rear tyre diameter', near(rt.max.y - rt.min.y, D.tyreRearDia, 0.004),
+   ((rt.max.y - rt.min.y) * 1000).toFixed(0) + ' mm  [' + D.tyreRearDia * 1000 + ']');
+ok('front tyre tread width', near((ft.max.x - ft.min.x - 2 * D.xFrontTyre), D.tyreFrontWidth, 0.004),
+   (D.tyreFrontWidth * 1000) + ' mm each side');
+ok('front wing is ahead of the front axle',
+   bbox('front-wing-mainplane').max.z > D.zFrontAxle,
+   'trailing edge z=' + bbox('front-wing-mainplane').min.z.toFixed(3));
+ok('rear wing is behind the rear axle',
+   bbox('rear-wing-mainplane').max.z < D.zRearAxle,
+   'leading edge z=' + bbox('rear-wing-mainplane').max.z.toFixed(3));
+
+const floorBox = bbox('floor');
+ok('floor underside sits at the reference plane', near(floorBox.min.y, D.yFloor, 0.003),
+   (floorBox.min.y * 1000).toFixed(0) + ' mm ride height');
+ok('floor upper surface is above its underside', floorBox.max.y > floorBox.min.y + 0.02,
+   'section depth ' + ((floorBox.max.y - floorBox.min.y) * 1000).toFixed(0) + ' mm at the diffuser');
+ok('floor stays inside the regulated width', floorBox.max.x <= D.floorHalfWidth + 0.001,
+   '+/- ' + (floorBox.max.x * 1000).toFixed(0) + ' mm');
+
+ok('halo sits above the cockpit', bbox('halo').max.y > 0.66, 'crown at y=' + bbox('halo').max.y.toFixed(3));
+ok('engine is on the centreline', Math.abs(bbox('engine-block').getCenter(new THREE.Vector3()).x) < 0.01);
+ok('energy store is carried low', bbox('energy-store').max.y < 0.36,
+   'top at y=' + bbox('energy-store').max.y.toFixed(3));
+
+let degenerate = [];
+let tooWide = [];
+for (const id of model.meshes.keys()) {
+  const b = bbox(id);
+  const sz = b.getSize(new THREE.Vector3());
+  if (sz.x < 1e-5 && sz.y < 1e-5 && sz.z < 1e-5) degenerate.push(id);
+  if (b.max.x > D.width / 2 + 0.002 || b.min.x < -D.width / 2 - 0.002) tooWide.push(id);
+}
+ok('no degenerate parts', degenerate.length === 0, degenerate.join(', '));
+ok('no part exceeds the width limit', tooWide.length === 0, tooWide.join(', '));
+
+/* --- Annotation coverage -------------------------------------------- */
+
+const geoIds = new Set(model.meshes.keys());
+const dataIds = new Set(Object.keys(PARTS));
+const missingData = [...geoIds].filter((id) => !dataIds.has(id));
+const missingGeo = [...dataIds].filter((id) => !geoIds.has(id));
+
+console.log('\nANNOTATION');
+ok('every mesh has an annotation', missingData.length === 0,
+   missingData.length ? missingData.join(', ') : geoIds.size + ' part ids');
+ok('every annotation has geometry', missingGeo.length === 0,
+   missingGeo.length ? missingGeo.join(', ') : dataIds.size + ' entries');
+
+const badGroup = Object.entries(PARTS).filter(([, p]) => !GROUP_ORDER.includes(p.group));
+ok('every part is in a known group', badGroup.length === 0,
+   badGroup.map(([id, p]) => id + ' -> ' + p.group).join(', '));
+
+const badSrc = Object.entries(PARTS).filter(
+  ([, p]) => !['official', 'reg', 'supplier', 'observed', 'general'].includes(p.src));
+ok('every part has a valid provenance tag', badSrc.length === 0,
+   badSrc.map(([id]) => id).join(', '));
+
+const badTier = Object.entries(PARTS).filter(([, p]) => !(p.tier >= 1 && p.tier <= 4));
+ok('every part has a detail tier', badTier.length === 0, badTier.map(([id]) => id).join(', '));
+
+const noAnchor = [...dataIds].filter((id) => !model.anchors.has(id));
+ok('every part has a camera anchor', noAnchor.length === 0, noAnchor.join(', '));
+
+/* --- Tier distribution ---------------------------------------------- */
+
+const tiers = [0, 0, 0, 0, 0];
+for (const p of Object.values(PARTS)) tiers[p.tier]++;
+console.log('\nDETAIL TIERS');
+console.log('  1 assemblies  ' + tiers[1]);
+console.log('  2 subsystems  ' + tiers[2]);
+console.log('  3 components  ' + tiers[3]);
+console.log('  4 detail      ' + tiers[4]);
+
+const srcCount = {};
+for (const p of Object.values(PARTS)) srcCount[p.src] = (srcCount[p.src] || 0) + 1;
+console.log('\nPROVENANCE');
+for (const [k, v] of Object.entries(srcCount)) console.log('  ' + k.padEnd(10) + v);
+
+/* --- Movables -------------------------------------------------------- */
+console.log('\nACTIVE AERO');
+ok('movable elements registered', model.movables.length === 4,
+   model.movables.map((m) => m.id).join(', '));
+
+console.log('\n' + (failed ? 'VALIDATION FAILED' : 'All checks passed') + '\n');
+process.exit(failed ? 1 : 0);
