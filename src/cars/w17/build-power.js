@@ -223,7 +223,7 @@ export function buildPowertrain(ctx) {
     const rad = new THREE.BoxGeometry(0.050, 0.238, 0.420);
     rad.rotateY(sx * 0.22);
     rad.rotateZ(sx * 0.14);
-    rad.translate(sx * 0.468, 0.330, 0.540);
+    rad.translate(sx * 0.468, 0.330, 0.300);
     add('water-radiator', rad, M.radiator);
 
     const cac = new THREE.BoxGeometry(0.044, 0.196, 0.330);

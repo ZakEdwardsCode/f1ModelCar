@@ -2,9 +2,9 @@
 //
 // Two things drive the 2026 front wing geometry, and both are specific:
 //
-//  1. The elements span far less than the car. Wide endplates carry the
-//     assembly out to the full permitted width, so the wing tips sit well
-//     inboard of the front tyres.
+//  1. The elements span far less than the car. They stop at Y = 675, the
+//     endplate sits just inboard of the front tyre, and only the footplate
+//     reaches out to Y = 900 (RV-FW-PROFILES, RV-FWEP-BODY, RV-FWEP-OFP).
 //  2. On the W17 the support pylons pick up on the SECOND plane, not the
 //     mainplane. That leaves the second plane fixed and makes the third
 //     plane the only movable one, and its central panel stays static too.
@@ -14,59 +14,75 @@
 // ABOVE the leading edge and the angle of attack is positive. Opening an
 // element toward straight-line mode flattens it, which is a negative
 // rotation about X.
+//
+// Both wings are laid out in FIA millimetres inside their Reference Volumes
+// from Appendix C2 of the 2026 Technical Regulations; see regs.js.
 
 import * as THREE from 'three';
-import { wingElement, plate, loft, resample } from '../../lib/geom.js';
+import { wingElement, plate, loft } from '../../lib/geom.js';
 import D from './dims.js';
+import { P, zX, yZ, XR, XDIF, piecewise } from './regs.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const rad = (d) => (d * Math.PI) / 180;
-
-const FW_SPAN = D.fwElementSpan;       // 0.800 half-span of the planes
-const FW_EP = D.fwEndplateOuter;       // 0.950 outer face of the endplate
+const sind = (d) => Math.sin(rad(d));
+const cosd = (d) => Math.cos(rad(d));
 
 /* ------------------------------------------------------------------ */
-/* Front wing element definitions                                      */
+/* Front wing (C3.10, RV-FW-PROFILES §21-22)                           */
 /* ------------------------------------------------------------------ */
 //
-// Each plane is defined as a function of normalised span a = |x| / span.
-// The elements cascade upward and rearward, each leading edge sitting just
-// behind and above the trailing edge of the one ahead, and every element
-// rises strongly toward the tip.
+// Up to three elements, inside a box that runs XF -1250..-475 and
+// Y 0..675, with its leading-edge limit swept back by RS-FW-SECTION and its
+// floor and roof given by the §22.1 polygon:
+//   Y 0: Z 60..200     Y 400: Z ~89..300     Y 675: Z 115..275
+// Everything here is laid out in that frame (mm) and converted at the end.
 
-const PLANES = {
-  mainplane: {
-    yc: (a) => 0.045 + 0.090 * Math.pow(a, 2.2),
-    chord: (a) => 0.215 + 0.050 * a - 0.035 * Math.pow(a, 5),
-    aoa: (a) => rad(7 + 5 * Math.pow(a, 1.5)),
-    zc: (a) => 2.800 - 0.028 * a * a,
-    t: 0.095, m: -0.075,
-  },
-  second: {
-    yc: (a) => 0.0922 + 0.100 * Math.pow(a, 2.15),
-    chord: (a) => 0.140 + 0.034 * a,
-    aoa: (a) => rad(17 + 6 * Math.pow(a, 1.4)),
-    zc: (a) => 2.5985 - 0.030 * a * a,
-    t: 0.085, m: -0.085,
-  },
-  third: {
-    yc: (a) => 0.1518 + 0.098 * Math.pow(a, 2.1),
-    chord: (a) => 0.108 + 0.028 * a,
-    aoa: (a) => rad(26 + 7 * Math.pow(a, 1.3)),
-    zc: (a) => 2.4657 - 0.026 * a * a,
-    t: 0.080, m: -0.090,
-  },
-};
+const FW_SPAN = D.fwElementSpan * 1000;      // 675
 
-/** Spanwise stations for one plane between two x limits. */
-function planeStations(p, x0, x1, n, origin = null) {
+const fwLEmin = (y) => -1250 + Math.max(0, y - 100) * 225 / 600;
+const fwZlow = (y) => piecewise([[0, 60], [100, 60], [675, 115]], y);
+
+/**
+ * Each element is described by its leading edge [XF, Z], chord and angle,
+ * all as functions of span Y. The next element starts just behind and above
+ * the trailing edge of the one ahead, leaving the slot gap that keeps flow
+ * attached on the flap. Inverted wing: trailing edge ABOVE leading edge.
+ */
+function fwElements(y) {
+  const t = Math.min(1, Math.abs(y) / FW_SPAN);
+  const main = {
+    x: fwLEmin(Math.abs(y)) + 8, z: fwZlow(Math.abs(y)) + 22,
+    c: 236 - 26 * t, a: 3 + 7 * Math.pow(t, 1.4),
+  };
+  main.tx = main.x + main.c * cosd(main.a);
+  main.tz = main.z + main.c * sind(main.a);
+  const second = {
+    x: main.tx - 28, z: main.tz + 12,
+    c: 172 - 8 * t, a: 10 + 6 * Math.pow(t, 1.2),
+  };
+  second.tx = second.x + second.c * cosd(second.a);
+  second.tz = second.z + second.c * sind(second.a);
+  const third = {
+    x: second.tx - 24, z: second.tz + 9,
+    c: 132 - 22 * t, a: 16 + 6 * t,
+  };
+  return { main, second, third };
+}
+
+/** Viewer-space wing stations for one element between two spans (mm). */
+function fwStations(key, y0, y1, n, origin = null) {
   const out = [];
   for (let i = 0; i <= n; i++) {
-    const x = x0 + (x1 - x0) * (i / n);
-    const a = Math.min(1, Math.abs(x) / FW_SPAN);
+    const y = y0 + (y1 - y0) * (i / n);
+    const e = fwElements(y)[key];
+    // Quarter-chord point, which foilRing treats as the section origin.
+    const qx = e.x + 0.25 * e.c * cosd(e.a);
+    const qz = e.z + 0.25 * e.c * sind(e.a);
     const s = {
-      x, chord: p.chord(a), aoa: p.aoa(a),
-      y: p.yc(a), z: p.zc(a), t: p.t, m: p.m,
+      x: y / 1000, chord: e.c / 1000, aoa: rad(e.a),
+      y: yZ(qz), z: zX(qx),
+      t: key === 'main' ? 0.090 : 0.082, m: key === 'main' ? -0.070 : -0.085,
     };
     if (origin) { s.y -= origin.y; s.z -= origin.z; }
     out.push(s);
@@ -74,40 +90,22 @@ function planeStations(p, x0, x1, n, origin = null) {
   return out;
 }
 
-/** Leading-edge point of a plane at a given normalised span. */
-function leadingEdge(p, a) {
-  const c = p.chord(a);
-  const u = -0.25 * c;
-  return {
-    y: p.yc(a) + u * Math.sin(p.aoa(a)),
-    z: p.zc(a) - u * Math.cos(p.aoa(a)),
-  };
+/** Leading-edge hinge of the third element at a span, in viewer space. */
+function fwHinge(y) {
+  const e = fwElements(y).third;
+  return { y: yZ(e.z), z: zX(e.x) };
 }
 
-/* ------------------------------------------------------------------ */
-/* Endplate                                                            */
-/* ------------------------------------------------------------------ */
-// Outline in the z-y plane, inboard face to outboard face. Much deeper
-// front-to-back and much thicker than a 2025 endplate, because for 2026 the
-// endplate is what carries the assembly out to maximum width.
-
-const EP_IN = [
-  [2.845, 0.030], [2.780, 0.132], [2.706, 0.252], [2.560, 0.318],
-  [2.418, 0.320], [2.372, 0.250], [2.390, 0.036],
-];
-const EP_OUT = [
-  [2.796, 0.042], [2.742, 0.140], [2.684, 0.244], [2.556, 0.298],
-  [2.436, 0.296], [2.400, 0.236], [2.414, 0.050],
-];
-
-function endplateSection(x, t) {
-  const pts = EP_IN.map((p, i) => {
-    const q = EP_OUT[i];
-    // Slight outward bow through the middle of the endplate thickness.
-    const bow = Math.sin(Math.PI * t) * 0.006;
-    return V(x, p[1] + (q[1] - p[1]) * t + bow, p[0] + (q[0] - p[0]) * t);
-  });
-  return resample(pts, 40);
+/**
+ * A flat plate whose outline is given in the FIA X-Z plane, with its
+ * lateral position allowed to vary with height. Used for the endplates,
+ * which on the 2026 car sweep inboard as they come down.
+ */
+function bentPlate(outline, yOf, thickness) {
+  const half = thickness / 2000;
+  const a = outline.map(([xf, z]) => P(xf, yOf(z), z).add(V(-half, 0, 0)));
+  const b = outline.map(([xf, z]) => P(xf, yOf(z), z).add(V(half, 0, 0)));
+  return loft([a, b], { capStart: true, capEnd: true });
 }
 
 /* ------------------------------------------------------------------ */
@@ -119,220 +117,272 @@ export function buildAero(ctx) {
   /* FRONT WING                                                         */
   /* ================================================================== */
 
+  const EP_Y = D.fwEndplateOuter * 1000 - 6;   // endplate centre plane
+  const tipY = EP_Y - 2;                        // elements die into it
+
   // Plane 1: mainplane, fixed.
   add('front-wing-mainplane',
-    wingElement(planeStations(PLANES.mainplane, -FW_SPAN, FW_SPAN, 22)),
-    M.bodyBlack);
+    wingElement(fwStations('main', -tipY, tipY, 26)), M.bodyBlack);
 
   // Plane 2: fixed on the W17, because the pylons land on it.
   add('front-wing-second-element',
-    wingElement(planeStations(PLANES.second, -FW_SPAN, FW_SPAN, 22)),
-    M.bodyBlack);
+    wingElement(fwStations('second', -tipY, tipY, 26)), M.bodyBlack);
 
   // Plane 3, central panel: static on this car.
   add('front-wing-upper-flap-centre',
-    wingElement(planeStations(PLANES.third, -0.225, 0.225, 10)),
-    M.bodyBlack);
+    wingElement(fwStations('third', -225, 225, 10)), M.bodyBlack);
 
   // Plane 3, outboard panels: the only movable aerodynamic surfaces at the
   // front of this car. Hinged about the leading edge at mid-panel.
-  const hinge = leadingEdge(PLANES.third, 0.65);
   for (const sx of [-1, 1]) {
+    const hinge = fwHinge(440);
     const pivot = new THREE.Group();
     pivot.position.set(0, hinge.y, hinge.z);
     root.add(pivot);
-    const geo = wingElement(
-      planeStations(PLANES.third, sx * 0.240, sx * FW_SPAN, 12, hinge)
-    );
+    const geo = wingElement(fwStations('third', sx * 240, sx * tipY, 14, hinge));
     add('front-wing-upper-flap', geo, M.bodyBlack, {
       parent: pivot,
-      anchor: [sx * 0.52, hinge.y + 0.05, hinge.z - 0.05],
+      anchor: [sx * 0.46, hinge.y + 0.05, hinge.z - 0.05],
     });
-    movables.push({ obj: pivot, closed: 0, open: -rad(22), id: 'front-wing-upper-flap' });
+    movables.push({ obj: pivot, closed: 0, open: -rad(18), id: 'front-wing-upper-flap' });
   }
 
-  // Endplates.
+  // Endplates, RV-FWEP-BODY (§23): Y 575..680, front edge behind
+  // RS-FW-SECTION, top under the §23.5 plane, rear edge clear of the
+  // 925 mm cylinder around the front tyre.
+  const EP = [
+    [-1040, 78], [-1040, 240], [-900, 298], [-740, 352], [-580, 366],
+    [-515, 334], [-488, 240], [-505, 140], [-545, 78],
+  ];
   for (const sx of [-1, 1]) {
-    const stations = [0, 0.34, 0.68, 1].map((t) =>
-      endplateSection(sx * (FW_SPAN + t * (FW_EP - FW_SPAN)), t)
-    );
-    add('front-wing-endplate', loft(stations, { capStart: true, capEnd: true }), M.bodySilver);
+    add('front-wing-endplate', bentPlate(EP, () => sx * EP_Y, 10), M.bodyBlack);
 
-    // Footplate shelf along the base, turning flow around the front tyre.
+    // Footplates, RV-FWEP-IFP and RV-FWEP-OFP: a shelf at the base of the
+    // endplate running out to Y 900, turning flow around the front tyre.
     const foot = plate(
-      [{ x: sx * 0.744, z: 2.770 }, { x: sx * FW_EP, z: 2.726 },
-       { x: sx * FW_EP, z: 2.412 }, { x: sx * 0.744, z: 2.392 }],
-      0.013, 'y'
+      [{ x: sx * 0.600, z: zX(-1030) }, { x: sx * 0.895, z: zX(-960) },
+       { x: sx * 0.895, z: zX(-420) }, { x: sx * 0.600, z: zX(-470) }],
+      0.014, 'y'
     );
-    foot.translate(0, 0.036, 0);
+    foot.translate(0, yZ(90), 0);
     add('front-wing-footplate', foot, M.carbonFine);
 
-    // Strakes standing on the footplate, inboard of the endplate.
+    // Strakes standing on the outer footplate.
     for (let i = 0; i < 2; i++) {
       const st = plate(
-        [{ y: 0.042, z: 2.700 - i * 0.05 }, { y: 0.116 - i * 0.018, z: 2.676 - i * 0.05 },
-         { y: 0.110 - i * 0.018, z: 2.470 }, { y: 0.040, z: 2.452 }],
+        [{ y: yZ(97), z: zX(-940 + i * 40) }, { y: yZ(150 - i * 14), z: zX(-900 + i * 40) },
+         { y: yZ(140 - i * 14), z: zX(-560) }, { y: yZ(97), z: zX(-520) }],
         0.006, 'x'
       );
-      st.translate(sx * (0.700 - i * 0.070), 0, 0);
+      st.translate(sx * (0.760 + i * 0.070), 0, 0);
       add('front-wing-strake', st, M.carbonFine);
     }
 
-    // Diveplane on the outer face.
+    // Diveplane on the outer face of the endplate.
     const dive = plate(
-      [{ x: sx * 0.884, z: 2.652 }, { x: sx * FW_EP, z: 2.634 },
-       { x: sx * FW_EP, z: 2.506 }, { x: sx * 0.884, z: 2.512 }],
+      [{ x: sx * (EP_Y / 1000 + 0.004), z: zX(-860) }, { x: sx * 0.735, z: zX(-840) },
+       { x: sx * 0.735, z: zX(-700) }, { x: sx * (EP_Y / 1000 + 0.004), z: zX(-690) }],
       0.008, 'y'
     );
-    dive.translate(0, 0.238, 0);
+    dive.translate(0, yZ(250), 0);
     add('front-wing-diveplane', dive, M.carbonFine);
 
     // Flap adjuster at the outboard end of the movable element.
+    const e3 = fwElements(600).third;
     const brk = plate(
-      [{ y: 0.190, z: 2.508 }, { y: 0.286, z: 2.486 }, { y: 0.284, z: 2.436 }, { y: 0.188, z: 2.458 }],
+      [{ y: yZ(e3.z - 20), z: zX(e3.x + 10) }, { y: yZ(e3.z + 60), z: zX(e3.x + 40) },
+       { y: yZ(e3.z + 60), z: zX(e3.x + 90) }, { y: yZ(e3.z - 20), z: zX(e3.x + 60) }],
       0.006, 'x'
     );
-    brk.translate(sx * 0.786, 0, 0);
+    brk.translate(sx * 0.630, 0, 0);
     add('front-wing-flap-adjuster', brk, M.aluminium);
 
     const screw = new THREE.CylinderGeometry(0.0055, 0.0055, 0.020, 8);
     screw.rotateZ(Math.PI / 2);
-    screw.translate(sx * 0.786, 0.236, 2.472);
+    screw.translate(sx * 0.630, yZ(e3.z + 30), zX(e3.x + 55));
     add('flap-adjuster-screw', screw, M.fastener);
   }
 
-  // Twin pylons, picking up on the second plane. The gap this leaves under
-  // the nose is the channel feeding the underfloor.
-  const p2le = leadingEdge(PLANES.second, 0.10);
+  // Twin pylons, RV-FW-PYLON (XF -1200..-950, Y 50..150), picking up on
+  // the second plane. The gap this leaves under the nose is the channel
+  // feeding the underfloor.
+  const s2 = fwElements(90).second;
   for (const sx of [-1, 1]) {
     const pyl = plate(
-      [{ y: 0.200, z: 2.700 }, { y: 0.206, z: 2.596 },
-       { y: p2le.y + 0.010, z: p2le.z - 0.020 }, { y: p2le.y + 0.004, z: p2le.z + 0.052 }],
-      0.020, 'x'
+      [{ y: yZ(165), z: zX(-1180) }, { y: yZ(165), z: zX(-960) },
+       { y: yZ(s2.z + 18), z: zX(s2.x + 70) }, { y: yZ(s2.z + 6), z: zX(s2.x + 8) }],
+      0.018, 'x'
     );
-    pyl.translate(sx * 0.082, 0, 0);
+    pyl.translate(sx * 0.090, 0, 0);
     add('front-wing-pylon', pyl, M.bodySilver);
   }
 
   /* ================================================================== */
-  /* REAR WING                                                          */
+  /* REAR WING (C3.11, RV-RW-PROFILES §30)                              */
   /* ================================================================== */
+  //
+  // Box XR+165..+630, Y <= 575, Z <= 880, with a floor that rises from
+  // Z 725 inboard of Y 150 to Z 785 at the tip: the 2026 "spoon" that keeps
+  // the outboard wing lower in the airflow than the centre.
 
-  const RW = D.rearWingSpan;           // 0.470 element half-span
-  const RW_EP = 0.500;                 // endplate outer face
+  const RW_EP_Y = 556;                         // endplate centre plane at the top
+  const RW = (RW_EP_Y - 4) / 1000;             // element half-span
+  const rwZlow = (y) => (y <= 150 ? 725 : 725 + (y - 150) * 60 / 425);
 
-  const rwStations = (yc, chord, aoaDeg, zc, rise) => {
+  // [LE offset behind XR, LE clearance above the floor, chord, angle at
+  //  centre, angle at tip], chained so each starts in the slot of the last.
+  const rwElements = (y) => {
+    const t = Math.min(1, Math.abs(y) / (RW * 1000));
+    const k = 1 - 0.06 * t;
+    const main = { x: XR + 175, z: rwZlow(Math.abs(y)) + 22, c: 228 * k, a: 6 - 3 * t };
+    main.tx = main.x + main.c * cosd(main.a);
+    main.tz = main.z + main.c * sind(main.a);
+    const f1 = { x: main.tx - 24, z: main.tz + 10 - 3 * t, c: 150 * k, a: 19 - 9 * t };
+    f1.tx = f1.x + f1.c * cosd(f1.a);
+    f1.tz = f1.z + f1.c * sind(f1.a);
+    const f2 = { x: f1.tx - 22, z: f1.tz + 8 - 3 * t, c: 104 * k, a: 24 - 13 * t };
+    return { main, f1, f2 };
+  };
+
+  const rwStations = (key, origin = null) => {
     const out = [];
-    for (let i = 0; i <= 14; i++) {
-      const x = -RW + (2 * RW * i) / 14;
-      const a = Math.abs(x) / RW;
-      out.push({
-        x, chord: chord - 0.014 * a * a, aoa: rad(aoaDeg),
-        y: yc + rise * a * a, z: zc, t: 0.095, m: -0.080,
-      });
+    for (let i = 0; i <= 16; i++) {
+      const y = -RW * 1000 + (2 * RW * 1000 * i) / 16;
+      const e = rwElements(y)[key];
+      const qx = e.x + 0.25 * e.c * cosd(e.a);
+      const qz = e.z + 0.25 * e.c * sind(e.a);
+      const s = {
+        x: y / 1000, chord: e.c / 1000, aoa: rad(e.a),
+        y: yZ(qz), z: zX(qx), t: 0.090, m: -0.080,
+      };
+      if (origin) { s.y -= origin.y; s.z -= origin.z; }
+      out.push(s);
     }
     return out;
   };
 
-  add('rear-wing-mainplane',
-    wingElement(rwStations(0.735, 0.200, 10, -2.265, 0.012)),
-    M.bodyBlack);
+  add('rear-wing-mainplane', wingElement(rwStations('main')), M.bodyBlack);
 
+  // The two flaps swing toward flat in straight-line mode, pivoting about
+  // their leading edges at the centreline.
   const rwFlaps = [
-    { id: 'rear-wing-flap-1', yc: 0.7912, chord: 0.130, aoa: 24, zc: -2.4367, open: -38 },
-    { id: 'rear-wing-flap-2', yc: 0.8610, chord: 0.095, aoa: 36, zc: -2.5400, open: -44 },
+    { id: 'rear-wing-flap-1', key: 'f1', open: -15 },
+    { id: 'rear-wing-flap-2', key: 'f2', open: -20 },
   ];
-
   for (const f of rwFlaps) {
-    const u = -0.25 * f.chord;
-    const hy = f.yc + u * Math.sin(rad(f.aoa));
-    const hz = f.zc - u * Math.cos(rad(f.aoa));
+    const e = rwElements(0)[f.key];
+    const hy = yZ(e.z);
+    const hz = zX(e.x);
     const pivot = new THREE.Group();
     pivot.position.set(0, hy, hz);
     root.add(pivot);
-    const geo = wingElement(rwStations(f.yc - hy, f.chord, f.aoa, f.zc - hz, 0.010));
+    const geo = wingElement(rwStations(f.key, { y: hy, z: hz }));
     add(f.id, geo, M.bodyBlack, { parent: pivot, anchor: [0, hy + 0.03, hz - 0.05] });
     movables.push({ obj: pivot, closed: 0, open: rad(f.open), id: f.id });
   }
 
+  // Endplates, RV-RWEP-BODY (§31): a band that runs at Y 345..375 low down
+  // and sweeps outboard to Y 535..575 above Z 700, trimmed front and rear by
+  // the §31.3 planes. Outline as [XF, Z], lateral position by height.
+  const rwEpY = (z) => piecewise([[250, 360], [400, 360], [690, RW_EP_Y], [900, RW_EP_Y]], z);
+  const RWEP = [
+    [XR + 390, 262], [XR + 612, 262], [XR + 672, 400], [XR + 738, 600],
+    [XR + 745, 878], [XR + 160, 878], [XR + 163, 700], [XR + 235, 550],
+    [XR + 308, 400],
+  ];
   for (const sx of [-1, 1]) {
-    const ep = plate(
-      [{ y: 0.600, z: -2.200 }, { y: 0.935, z: -2.286 }, { y: 0.930, z: -2.584 },
-       { y: 0.690, z: -2.596 }, { y: 0.592, z: -2.400 }],
-      0.012, 'x'
-    );
-    ep.translate(sx * (RW_EP - 0.006), 0, 0);
-    add('rear-wing-endplate', ep, M.bodySilver);
+    add('rear-wing-endplate', bentPlate(RWEP, (z) => sx * rwEpY(z), 12), M.bodyBlack);
 
     for (let i = 0; i < 3; i++) {
       const lv = new THREE.BoxGeometry(0.016, 0.034, 0.004);
       lv.rotateX(0.3);
-      lv.translate(sx * (RW_EP - 0.006), 0.870 - i * 0.046, -2.320 - i * 0.012);
+      lv.translate(sx * (RW_EP_Y / 1000 + 0.004), yZ(840 - i * 46), zX(XR + 640 + i * 26));
       add('rear-wing-endplate-louvre', lv, M.structureBlack);
     }
 
+    // Twin pylons, RV-RW-PYLON (§32): Y 50..110, from the gearbox up to
+    // the underside of the mainplane.
     const pyl = plate(
-      [{ y: 0.330, z: -2.100 }, { y: 0.730, z: -2.226 }, { y: 0.728, z: -2.330 },
-       { y: 0.330, z: -2.226 }],
+      [{ y: yZ(310), z: zX(XR + 10) }, { y: yZ(450), z: zX(XR + 10) },
+       { y: yZ(735), z: zX(XR + 190) }, { y: yZ(742), z: zX(XR + 400) },
+       { y: yZ(310), z: zX(XDIF + 380) }],
       0.024, 'x'
     );
-    pyl.translate(sx * 0.096, 0, 0);
+    pyl.translate(sx * 0.080, 0, 0);
     add('rear-wing-pylon', pyl, M.bodySilver);
 
-    const act = new THREE.CylinderGeometry(0.022, 0.022, 0.085, 14);
-    act.rotateZ(Math.PI / 2);
-    act.translate(sx * 0.100, 0.778, -2.407);
+    // Straight-line mode actuation, inside RV-RW-SLM-FAIRING on the
+    // centreline above the flaps.
+    const f1 = rwElements(0).f1;
+    const act = new THREE.CylinderGeometry(0.018, 0.018, 0.085, 14);
+    act.rotateX(Math.PI / 2);
+    act.translate(sx * 0.020, yZ(f1.tz + 40), zX(f1.x + 60));
     add('active-aero-actuator', act, M.aluminium);
 
-    const link = new THREE.CylinderGeometry(0.006, 0.006, 0.100, 8);
+    const link = new THREE.CylinderGeometry(0.005, 0.005, 0.080, 8);
     link.rotateX(0.75);
-    link.translate(sx * 0.148, 0.818, -2.462);
+    link.translate(sx * 0.020, yZ(f1.tz + 10), zX(f1.tx - 10));
     add('active-aero-linkage', link, M.aluminium);
   }
 
-  const brace = new THREE.CylinderGeometry(0.010, 0.010, 2 * RW * 0.88, 10);
+  // Lower brace between the endplates, RV-RW-BRACE: XR+375..+625,
+  // Y <= 375, Z 310..350.
+  const brace = new THREE.CylinderGeometry(0.010, 0.010, 0.720, 10);
   brace.rotateZ(Math.PI / 2);
-  brace.translate(0, 0.712, -2.222);
+  brace.translate(0, yZ(330), zX(XR + 500));
   add('rear-wing-brace', brace, M.carbonFine);
 
   /* ================================================================== */
   /* REAR STRUCTURES                                                    */
   /* ================================================================== */
 
-  const ris = new THREE.CylinderGeometry(0.052, 0.080, 0.360, 18);
+  // Rear impact structure inside RV-TAIL (§19): XDIF-110..+760,
+  // Y <= 145, Z 175..380 at its tail.
+  const risLen = 0.500;
+  const ris = new THREE.CylinderGeometry(0.050, 0.078, risLen, 18);
   ris.rotateX(Math.PI / 2);
-  ris.translate(0, 0.318, -2.140);
+  ris.translate(0, yZ(280), zX(XDIF + 760) + risLen / 2);
   add('rear-impact-structure', ris, M.carbonFine);
 
-  const light = new THREE.BoxGeometry(0.072, 0.052, 0.020);
-  light.translate(0, 0.318, -2.316);
+  const light = new THREE.BoxGeometry(0.072, 0.040, 0.020);
+  light.translate(0, yZ(262), zX(XDIF + 760) - 0.004);
   add('rain-light', light, M.rainLight);
+
+  // Camera position 6: in the rear impact structure, looking backwards.
+  const rcam = new THREE.CylinderGeometry(0.012, 0.012, 0.012, 14);
+  rcam.rotateX(Math.PI / 2);
+  rcam.translate(0, yZ(305), zX(XDIF + 760) - 0.002);
+  add('rear-facing-camera', rcam, M.glass);
+  const rcamBody = new THREE.BoxGeometry(0.036, 0.030, 0.040);
+  rcamBody.translate(0, yZ(305), zX(XDIF + 760) + 0.022);
+  add('rear-facing-camera', rcamBody, M.structureBlack);
 
   for (const sx of [-1, 1]) {
     const l2 = new THREE.BoxGeometry(0.012, 0.042, 0.016);
-    l2.translate(sx * (RW_EP - 0.006), 0.710, -2.556);
+    l2.translate(sx * 0.556, yZ(700), zX(XR + 740));
     add('auxiliary-rain-light', l2, M.rainLight);
   }
 
-  const pipe = new THREE.CylinderGeometry(0.046, 0.050, 0.200, 18, 1, true);
+  // Tailpipe, RV-TAILPIPE (§20): XR-55..+400, Y <= 75, Z 350..550.
+  const pipe = new THREE.CylinderGeometry(0.046, 0.050, 0.220, 18, 1, true);
   pipe.rotateX(Math.PI / 2 - 0.10);
-  pipe.translate(0, 0.392, -2.010);
+  pipe.translate(0, yZ(440), zX(XR + 270));
   add('exhaust-tailpipe', pipe, M.inconel);
 
   for (const sx of [-1, 1]) {
     const wg = new THREE.CylinderGeometry(0.017, 0.018, 0.150, 12, 1, true);
     wg.rotateX(Math.PI / 2 - 0.12);
-    wg.translate(sx * 0.060, 0.376, -1.985);
+    wg.translate(sx * 0.064, yZ(425), zX(XR + 240));
     add('wastegate-pipe', wg, M.inconel);
   }
 
   const towF = new THREE.TorusGeometry(0.022, 0.006, 8, 16);
   towF.rotateY(Math.PI / 2);
-  towF.translate(0, 0.178, 2.560);
+  towF.translate(0, yZ(122), zX(-1220));
   add('front-towing-eye', towF, M.aluminium);
 
   const towR = new THREE.TorusGeometry(0.024, 0.007, 8, 16);
   towR.rotateY(Math.PI / 2);
-  towR.translate(0, 0.262, -2.210);
+  towR.translate(0, yZ(215), zX(XDIF + 640));
   add('rear-towing-eye', towR, M.aluminium);
 }

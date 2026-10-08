@@ -67,17 +67,17 @@ export function buildRunningGear(ctx) {
     // Upper wishbone. The forward leg picks up higher on the chassis than
     // the rearward leg: that inclination is the anti-dive geometry.
     add('front-upper-wishbone',
-      link(V(sx * 0.205, 0.372, 1.918), V(sx * 0.690, 0.462, zF + 0.012), 0.030, 0.085),
+      link(V(sx * 0.165, 0.475, 1.918), V(sx * 0.690, 0.462, zF + 0.012), 0.030, 0.085),
       M.carbonFine);
     add('front-upper-wishbone',
-      link(V(sx * 0.210, 0.330, 1.452), V(sx * 0.690, 0.462, zF + 0.012), 0.030, 0.082),
+      link(V(sx * 0.198, 0.455, 1.452), V(sx * 0.690, 0.462, zF + 0.012), 0.030, 0.082),
       M.carbonFine);
 
     add('front-lower-wishbone',
-      link(V(sx * 0.195, 0.128, 1.930), V(sx * 0.742, 0.158, zF - 0.006), 0.034, 0.096),
+      link(V(sx * 0.150, 0.240, 1.930), V(sx * 0.742, 0.158, zF - 0.006), 0.034, 0.096),
       M.carbonFine);
     add('front-lower-wishbone',
-      link(V(sx * 0.198, 0.116, 1.442), V(sx * 0.742, 0.158, zF - 0.006), 0.034, 0.092),
+      link(V(sx * 0.188, 0.252, 1.442), V(sx * 0.742, 0.158, zF - 0.006), 0.034, 0.092),
       M.carbonFine);
 
     add('front-pushrod',
@@ -85,7 +85,7 @@ export function buildRunningGear(ctx) {
       M.carbonFine);
 
     add('front-track-rod',
-      link(V(sx * 0.170, 0.262, 1.352), V(sx * 0.712, 0.278, 1.512), 0.022, 0.048),
+      link(V(sx * 0.170, 0.300, 1.352), V(sx * 0.712, 0.278, 1.512), 0.022, 0.048),
       M.carbonFine);
 
     const up = new THREE.BoxGeometry(0.058, 0.330, 0.108);

@@ -289,7 +289,7 @@ export function buildDecalMaterials(carNumber) {
   const decal = (map, opts = {}) => new THREE.MeshBasicMaterial({
     map, transparent: true, depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
-    toneMapped: false, side: THREE.DoubleSide, ...opts,
+    toneMapped: false, side: THREE.FrontSide, ...opts,
   });
 
   return {

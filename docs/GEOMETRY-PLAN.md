@@ -5,9 +5,22 @@ geometry is not. This plan covers what is wrong, what public data and
 open-source tools actually exist (checked, not assumed), and the order to fix
 things in.
 
+## Status
+
+| Phase | State |
+| --- | --- |
+| 1. Regulation frame | **Done.** `src/cars/w17/regs.js`; `dims.js` stations derive from XA, XC, XPU, XR. All §3 rows fixed. |
+| 2. Reference Volumes | **Done as checks.** The volumes the surfaces use are encoded in `regs.js`; the validator tests every vertex of the wings, sidepods, engine cover, floor, nose and camera pods against them (3 mm tolerance). Building them as CSG meshes for a viewer overlay is still open. |
+| 3. Rebuild components | **Done** for the nose, survival cell, cockpit position, front wing, endplates and footplates, sidepods, engine cover, fin, floor and diffuser, rear wing, endplates, pylons, brace, tail, mirrors, roll hoop and airbox. Wheel bodywork and halo are still estimates (CAD-only volumes). |
+| Cameras | **Done.** All six Article C8.16 positions are modelled and annotated. |
+| Solid rendering | **Done.** The car is opaque by default. Selection is an opaque tint. The bodywork ghosts only while the cutaway is on or an internal part is selected. |
+| 0. Measurement harness | Open. Needs reference images on your machine (see §5). |
+| 4. W17-specific shapes from photos | Open. This is the step that moves the shapes from "a legal 2026 car" to "the W17". |
+| 5. Surface quality | Partly done: closed, overlapping bodywork with no see-through gaps. Catmull-Rom stations and edge radii are still open. |
+
 ---
 
-## 1. What is wrong today
+## 1. What was wrong
 
 Rendered headlessly from side, front, rear, top and three-quarter views:
 
@@ -111,7 +124,9 @@ Ranked by how much it can be trusted.
 
 Converting `dims.js` to the FIA frame (XF = 1700 mm − z):
 
-| Constraint | Regulation | Model now | Verdict |
+Status: every row below is now fixed and checked by `tools/validate.mjs`.
+
+| Constraint | Regulation | Model before | Verdict |
 | --- | --- | --- | --- |
 | Front axle vs survival-cell front | XF 0–150 mm behind XA | XA (`zFrontBulkhead` 1.560) is 140 mm **behind** the axle | Wrong side. Move bulkhead forward ~200 mm. |
 | Cockpit rear XC | 1830–2030 mm behind XA | 1440 mm | Cockpit/driver ~400 mm too far forward. |

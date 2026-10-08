@@ -11,6 +11,8 @@ import { buildAero } from './build-aero.js';
 import { buildRunningGear } from './build-running.js';
 import { buildPowertrain } from './build-power.js';
 import D from './dims.js';
+import { tubAt } from './build-chassis.js';
+import { zX, yZ } from './regs.js';
 
 // Parts in these groups are internal and hidden until cutaway view is on.
 const INTERNAL = new Set([
@@ -22,7 +24,7 @@ const INTERNAL = new Set([
   'control-electronics', 'inverter', 'high-voltage-cable', 'fuel-cell',
   'fuel-collector', 'high-pressure-fuel-pump', 'refuelling-connector',
   'water-radiator', 'charge-air-cooler', 'ers-cooler', 'oil-cooler',
-  'water-pump', 'coolant-header-tank', 'gearbox-casing', 'gear-cluster',
+  'water-pump', 'coolant-header-tank', 'gear-cluster',
   'clutch', 'differential', 'selector-barrel', 'hydraulic-accumulator',
   'gearbox-bellhousing', 'front-rocker', 'front-damper', 'front-torsion-bar',
   'front-anti-roll-bar', 'front-heave-element', 'rear-rocker', 'rear-damper',
@@ -31,9 +33,13 @@ const INTERNAL = new Set([
   'hans-device',
 ]);
 
-// Parts hidden by the bodywork but shown when the shell is made transparent.
+// Bodywork that turns translucent in the cutaway view. Everything else stays
+// opaque at all times: the car only goes see-through when the cutaway is
+// switched on, or while an internal part is selected.
 const SHELL = new Set([
   'engine-cover', 'sidepod', 'nose-cone', 'shark-fin', 'survival-cell',
+  'sidepod-stripe-panel', 'sidepod-inlet', 'sidepod-inlet-splitter',
+  'engine-cover-louvre', 'sidepod-cooling-louvre', 'bodywork-quarter-turn-fastener',
 ]);
 
 export function buildW17(opts = {}) {
@@ -89,22 +95,30 @@ export function buildW17(opts = {}) {
     return m;
   };
 
+  // Positions are taken from the same body plan the surfaces are lofted
+  // from, so the lettering always sits on the paint rather than in the air.
+  const nose = tubAt(-600);
+  const crownStar = tubAt(-900);
+  const crownWord = tubAt(-350);
   for (const sx of [-1, 1]) {
     // Race number on the shark fin, the way it is read from a helicopter.
-    decal('car-number', DEC.number, 0.30, 0.30,
-      [sx * 0.011, 0.560, -1.060], [0, sx * Math.PI / 2, 0]);
+    decal('car-number', DEC.number, 0.135, 0.135,
+      [sx * 0.0095, yZ(790), zX(2880)], [0, sx * Math.PI / 2, 0]);
     // Smaller number on the nose flank.
-    decal('car-number', DEC.numberSmall, 0.135, 0.135,
-      [sx * 0.120, 0.248, 2.300], [0, sx * Math.PI / 2, 0]);
-    // Petronas wordmark along the sidepod flank.
+    decal('car-number', DEC.numberSmall, 0.120, 0.120,
+      [sx * (nose.w / 1000 + 0.004), yZ((nose.zBot + nose.zTop) / 2 + 10), zX(-600)],
+      [0, sx * Math.PI / 2, 0]);
+    // Petronas wordmark along the sidepod flank, at its widest point.
     decal('sponsor-marking', DEC.petronas, 0.40, 0.062,
-      [sx * 0.742, 0.330, 0.140], [0, sx * Math.PI / 2, 0]);
+      [sx * 0.7095, yZ(372), zX(1650)], [0, sx * Math.PI / 2, 0]);
     decal('sponsor-marking', DEC.amg, 0.13, 0.055,
-      [sx * 0.742, 0.240, -0.430], [0, sx * Math.PI / 2, 0]);
+      [sx * 0.6705, yZ(340), zX(2120)], [0, sx * Math.PI / 2 - sx * 0.12, 0]);
   }
-  // Three-pointed star on the nose crown and the engine cover.
-  decal('team-marque', DEC.star, 0.085, 0.085, [0, 0.3005, 2.545], [-Math.PI / 2, 0, 0]);
-  decal('sponsor-marking', DEC.mercedes, 0.26, 0.042, [0, 0.9405, -0.120], [-Math.PI / 2, 0, 0]);
+  // Three-pointed star and wordmark on the nose crown.
+  decal('team-marque', DEC.star, 0.085, 0.085,
+    [0, yZ(crownStar.zTop) + 0.0015, zX(-900)], [-Math.PI / 2, 0, 0]);
+  decal('sponsor-marking', DEC.mercedes, 0.19, 0.031,
+    [0, yZ(crownWord.zTop) + 0.0015, zX(-350)], [-Math.PI / 2, 0, 0]);
 
   // Derive an anchor for every part that did not declare one, from the
   // combined bounding box of its meshes.

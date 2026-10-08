@@ -1006,16 +1006,17 @@ export const BODY_PARTS = {
   },
 
   'onboard-camera-pod': {
-    name: 'Onboard Camera Pod',
+    name: 'Airbox Camera Pod (Position 3)',
     group: 'Sensors & Cameras',
     tier: 3,
-    src: 'general',
+    src: 'reg',
     spec: [
-      ['Supplied by', 'Formula 1, not the team'],
-      ['Position', 'Fixed by regulation'],
-      ['Weight', 'Counts toward minimum car weight'],
+      ['Regulation', 'Article C8.16.8'],
+      ['Forward-most point', 'Between XC and XC + 300 mm'],
+      ['Height', 'Z 840 to 900 mm'],
+      ['Inner face', 'Y 120 to 170 mm from the centreline'],
     ],
-    text: 'The camera housings are supplied by Formula 1 and their positions are fixed, so every car carries the same aerodynamic penalty and the broadcast gets consistent angles. Teams cannot move them for performance. Dummy pods are fitted where a camera is not installed so the aerodynamic effect is identical whether or not that car is being broadcast.',
+    text: 'The pair of camera pods either side of the airbox. Their position is fixed to the millimetre by the regulations, so every car carries the same aerodynamic penalty and the broadcast gets consistent angles. Teams cannot move them for performance. Where a camera is not installed a housing of identical size, shape and mass is fitted instead, so the car is the same whether or not it is being broadcast.',
   },
 
   'onboard-camera-lens': {
@@ -1030,14 +1031,17 @@ export const BODY_PARTS = {
   },
 
   'nose-camera-pod': {
-    name: 'Nose Camera Pod',
+    name: 'Nose Camera Pods (Position 2)',
     group: 'Sensors & Cameras',
-    tier: 4,
-    src: 'general',
+    tier: 3,
+    src: 'reg',
     spec: [
-      ['Position', 'Nose top, forward-facing'],
+      ['Regulation', 'Article C8.16.7, RV-CAMERA-2'],
+      ['Volume', 'XF -450 to -150 mm, Z 325 to ~490 mm'],
+      ['Left side', 'Camera'],
+      ['Right side', 'Lightweight housing of the same shape'],
     ],
-    text: 'The forward-facing camera on the nose, giving the low nose-height shot used for overtakes and start sequences. Being right at the front, it is also the camera most often destroyed in first-lap contact.',
+    text: 'The two pods standing off the nose flanks just ahead of the front axle. The camera is on the left; the right carries a matching lightweight housing, or an FIA diagnostic camera when one is requested. Both must sit entirely inside RV-CAMERA-2, and the camera has to be aimed so its line of sight does not cross any part of the car ahead of it, which is why the pods stand out from the bodywork on stalks.',
   },
 
   'pitot-tube': {

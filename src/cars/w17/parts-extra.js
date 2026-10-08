@@ -172,4 +172,64 @@ export const EXTRA_PARTS = {
     ],
     text: 'Shown as a plain form to set the scale of the cockpit. An F1 driver lies almost flat with their feet above their hips, which is why the survival cell is deep at the cockpit and shallow ahead of it. The seat is moulded around the individual driver and lifts out with them in an extraction. Driver and seat have a combined minimum weight, so lighter drivers carry ballast rather than gaining an advantage.',
   },
+
+  /* ================================================================== */
+  /* CAMERAS - ARTICLE C8.16 POSITIONS                                  */
+  /* ================================================================== */
+
+  't-camera': {
+    name: 'T-Camera (Position 4)',
+    group: 'Sensors & Cameras',
+    tier: 3,
+    src: 'reg',
+    spec: [
+      ['Regulation', 'Article C8.16.1 and C8.16.9'],
+      ['Position', 'Top of the roll structure'],
+      ['Forward-most point', 'Ahead of XC + 80 mm'],
+      ['Required', 'Camera must be fitted at every event'],
+    ],
+    text: 'The bar across the top of the roll hoop, and the camera behind the classic over-the-driver onboard shot. Position 4 is one of the two places where the regulations require a working camera, not just a housing, at every event. Teams paint the T-camera in one of two colours so the broadcast can tell their two cars apart at a glance. Which colour this car runs is not modelled here.',
+  },
+
+  'driver-facing-camera': {
+    name: 'Driver-Facing Camera (Position 1)',
+    group: 'Sensors & Cameras',
+    tier: 4,
+    src: 'reg',
+    spec: [
+      ['Regulation', 'Article C8.16.6'],
+      ['Position', 'Above the survival cell, ahead of the cockpit opening'],
+      ['Points', 'Back at the driver'],
+      ['Required', 'Camera or housing at every event'],
+    ],
+    text: 'Mounted on the centreline on top of the chassis, between the halo pillar and the cockpit opening, looking back at the driver. The regulations fix where it may go: forward of the cockpit opening, behind the forward halo attachment, and symmetrical about the centreline. Its conditioning electronics must sit inside the survival cell.',
+  },
+
+  '360-camera': {
+    name: '360-Degree Camera (Position 5)',
+    group: 'Sensors & Cameras',
+    tier: 4,
+    src: 'reg',
+    spec: [
+      ['Regulation', 'Article C8.16.10'],
+      ['Lens centre', 'Forward of XC - 1250 mm, on the centreline'],
+      ['Lower surface', 'No more than 6 degrees to the reference plane'],
+      ['Required', 'Camera must be fitted at every event'],
+    ],
+    text: 'A small domed camera on the chassis crown ahead of the cockpit. Because it records the full sphere around it, the rules forbid any shrouding or cutout around it above a defined height, so nothing on the car gets in the way of the image. Position 5 is the second of the two positions that must always carry a live camera.',
+  },
+
+  'rear-facing-camera': {
+    name: 'Rear-Facing Camera (Position 6)',
+    group: 'Sensors & Cameras',
+    tier: 4,
+    src: 'reg',
+    spec: [
+      ['Regulation', 'Article C8.16.11'],
+      ['Position', 'Inside the rear impact structure'],
+      ['Lens', 'Facing rearward, within 1 degree of square'],
+      ['Required', 'On request of the commercial rights holder'],
+    ],
+    text: 'Set into the tail of the rear impact structure, above the rain light, looking straight back at the following car. It is only fitted when the broadcaster asks for it. If neither this camera nor a helmet camera is carried, the car has to carry 0.35 kg of ballast instead, so running without it gains nothing.',
+  },
 };

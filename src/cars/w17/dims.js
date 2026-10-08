@@ -10,6 +10,11 @@
 // regulations are marked REG. Everything else is a proportion chosen to match
 // published photography and is marked EST - those are modelling choices, not
 // claims about the real car.
+//
+// Longitudinal stations are derived from the regulation planes in regs.js
+// (XA, XC, XPU, XR), so the layout cannot drift away from Article C2.3.
+
+import { zX, yZ, Z_FRONT_AXLE, Y_REF, XA, XC, XPU, XR, XDIF } from './regs.js';
 
 export const D = {
   // --- Overall envelope ------------------------------------------------
@@ -20,36 +25,37 @@ export const D = {
   massKg: 772,        // PUB  772 kg
 
   // --- Longitudinal stations ------------------------------------------
-  zNose: 2.900,       // EST  nose tip
-  zFrontAxle: 1.700,  // derived: wheelbase centred on the axle pair
-  zRearAxle: -1.700,
-  zTail: -2.605,      // derived: zNose - length
+  // Viewer z, metres. XF is the FIA longitudinal coordinate from the front
+  // axle in mm, increasing rearward; see regs.js.
+  zNose: zX(-1300),            // REG  forward limit of RV-BODY-FRONT
+  zFrontAxle: Z_FRONT_AXLE,    // XF = 0
+  zRearAxle: zX(XR),           // XR = 0, 3400 mm behind
+  zTail: zX(XDIF + 760),       // REG  rear limit of RV-TAIL
 
-  zFrontBulkhead: 1.560,
-  zCockpitFront: 1.080,
-  zCockpitRear: 0.120,
-  zRollHoop: 0.060,
-  zEngineFront: -0.560,
+  zFrontBulkhead: zX(XA),      // REG  XA = 0, 75 mm ahead of the front axle
+  zCockpitFront: zX(XC - 800), // EST  cockpit opening is ~800 mm long
+  zCockpitRear: zX(XC),        // REG  XC = 0, 1930 mm behind XA
+  zRollHoop: zX(XC + 160),     // REG  inside RV-ROLL-HOOP, XC to XC + 320
+  zEngineFront: zX(XPU),       // REG  400 mm behind XC (minimum 360)
   zEngineRear: -1.260,
   zGearboxRear: -1.980,
-  zRearWing: -2.265,
+  zRearWing: zX(XR + 400),     // REG  middle of RV-RW-PROFILES
 
   // --- Vertical layout -------------------------------------------------
-  // An F1 car is a deep tub sitting almost on its own floor, not a shallow
-  // body on stilts. These are the heights that set that proportion.
-  yFloor: 0.030,        // EST  floor reference plane, ride height
+  // y = 0 is the ground. The FIA reference plane (Z = 0) sits at yFloor.
+  yFloor: Y_REF,        // EST  reference plane, i.e. ride height
   yPlank: 0.020,
-  yTubBottom: 0.060,    // EST  survival cell underside at the cockpit
-  yCockpitRim: 0.572,   // EST  top of the survival cell flanks
-  yDriverHip: 0.175,
-  yDriverShoulder: 0.430,
-  yHelmetCentre: 0.655, // EST  helmet top lands near 0.795
-  yHaloCrown: 0.755,    // EST  ring sits level, just under the helmet crown
-  yRollHoopTop: 0.950,  // REG  inside the 970 mm height limit
-  yAirboxTop: 0.940,
+  yTubBottom: yZ(60),   // EST  survival cell underside at the cockpit
+  yCockpitRim: yZ(700), // REG  RV-BODY-FRONT allows 680-770 here
+  yDriverHip: yZ(175),
+  yDriverShoulder: yZ(470),
+  yHelmetCentre: yZ(700), // EST  only the top half shows above the rim
+  yHaloCrown: yZ(820),  // EST  ring sits level with the helmet's upper half
+  yRollHoopTop: yZ(925),  // REG  inside the 970 mm limit of RV-ROLL-HOOP
+  yAirboxTop: yZ(915),
   yCrank: 0.090,        // REG  crankshaft centreline above the reference plane
-  ySidepodTop: 0.500,
-  ySidepodBottom: 0.130,
+  ySidepodTop: yZ(560),
+  ySidepodBottom: yZ(140),
 
   // --- Tyres (Pirelli 2026) -------------------------------------------
   // Fronts 25 mm narrower and 15 mm smaller in diameter than 2025,
@@ -65,15 +71,15 @@ export const D = {
   xRearOuter: 0.930,       // EST  rear track slightly inside the fronts
 
   // --- Aero surfaces ---------------------------------------------------
-  // For 2026 the wing ELEMENTS span much less than the car, and wide
-  // endplates carry the assembly out to the full permitted width.
-  fwElementSpan: 0.800,    // EST  half-span of the three planes
-  fwEndplateOuter: 0.950,  // REG  assembly reaches maximum width
-  frontWingLE: 2.855,
-  rearWingSpan: 0.500,
-  floorHalfWidth: 0.740,   // REG  floor narrowed for 2026
-  zFloorFront: 1.420,
-  zFloorRear: -1.860,
+  // For 2026 the wing ELEMENTS span much less than the car. The endplate
+  // sits inboard of the front tyre and only the footplate reaches outboard.
+  fwElementSpan: 0.675,    // REG  RV-FW-PROFILES, Y <= 675
+  fwEndplateOuter: 0.660,  // REG  RV-FWEP-BODY, Y 575-680
+  frontWingLE: zX(-1250),  // REG  forward limit of RV-FW-PROFILES
+  rearWingSpan: 0.555,     // REG  RV-RW-PROFILES, Y <= 575, less the endplate
+  floorHalfWidth: 0.770,   // REG  RV-FLOOR-BODY, Y <= 770
+  zFloorFront: zX(350),    // REG  RV-FLOOR-BODY starts at XF = 350
+  zFloorRear: zX(XR + 300),
 
   // --- Brakes (Brembo / Carbone Industries 2026) -----------------------
   discFrontDia: 0.330,     // supplier  330 mm, up to 345 mm permitted
@@ -91,28 +97,38 @@ D.xFrontTyre = D.xFrontOuter - D.tyreFrontWidth / 2;
 D.xRearTyre = D.xRearOuter - D.tyreRearWidth / 2;
 
 /**
- * Survival cell body plan: half-width and the underside and upper surface
- * heights at each longitudinal station. The nose grows from a slim tip into
- * a deep tub, which is the single proportion that makes the car read
- * correctly from any angle.
+ * Survival cell and nose body plan, in FIA millimetres:
+ *   [XF, half-width, underside Z, crown Z]
+ *
+ * Every row is checked against the regulation envelope it has to live in:
+ *   - crown under the 11 m arc of RV-BODY-FRONT (§12.1), see noseCrownLimit
+ *   - underside above the §12.2 line ahead of XC - 875
+ *   - plan width inside §12.9 (200 at XA + 100, 265 at XC - 1015, 400 at XC - 400)
+ *   - and enclosing RV-CH-FRONT-MIN (§13): 268 to 490 mm wide, 300 to 415 tall
+ * The nose tip and taper are EST, matched to launch photography.
  */
-export const TUB_PLAN = [
-  // z,      w,     yBot,  yTop
-  [2.900, 0.042, 0.205, 0.268],  // nose tip
-  [2.760, 0.058, 0.196, 0.278],
-  [2.560, 0.081, 0.180, 0.296],
-  [2.300, 0.111, 0.158, 0.322],
-  [2.020, 0.149, 0.132, 0.356],
-  [1.780, 0.192, 0.108, 0.392],
-  [1.560, 0.235, 0.088, 0.428],  // front bulkhead
-  [1.340, 0.262, 0.074, 0.468],
-  [1.080, 0.286, 0.066, 0.516],  // dash bulkhead
-  [0.860, 0.300, 0.062, 0.548],
-  [0.560, 0.312, 0.060, 0.566],
-  [0.240, 0.318, 0.060, 0.572],
-  [-0.060, 0.316, 0.062, 0.568],
-  [-0.320, 0.302, 0.066, 0.552],
-  [-0.560, 0.288, 0.072, 0.530],  // engine front face
+export const TUB_PLAN_MM = [
+  // XF,    w,   zBot, zTop
+  [-1300,  48,  150,  198],   // nose tip
+  [-1180,  70,  140,  240],
+  [-1000,  94,  138,  305],
+  [-800,  114,  160,  370],
+  [-520,  134,  186,  450],
+  [-260,  148,  204,  515],
+  [XA,    156,  218,  545],   // XA: survival cell front
+  [250,   184,  222,  590],
+  [525,   212,  214,  622],
+  [840,   238,  200,  640],
+  [XC - 875, 250, 196, 642],  // dash bulkhead, start of the cockpit
+  [1150,  282,  100,  668],
+  [1450,  320,   62,  690],
+  [1700,  348,   60,  700],
+  [XC,    356,   60,  700],   // XC: rear of the cockpit
+  [2060,  338,   62,  640],
+  [XPU,   300,   66,  580],   // XPU: engine mounting face
 ];
+
+/** The same plan in viewer metres: [z, w, yBot, yTop]. */
+export const TUB_PLAN = TUB_PLAN_MM.map(([xf, w, zb, zt]) => [zX(xf), w / 1000, yZ(zb), yZ(zt)]);
 
 export default D;

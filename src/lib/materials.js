@@ -311,11 +311,5 @@ export function buildMaterials(quality = 'high') {
     color: 0xa8adb4, roughness: 0.3, metalness: 1.0,
   });
 
-  // Highlight material used when a part is selected.
-  M.highlight = new THREE.MeshBasicMaterial({
-    color: 0x00e5d0, transparent: true, opacity: 0.32,
-    side: THREE.DoubleSide, depthWrite: false,
-  });
-
   return M;
 }
